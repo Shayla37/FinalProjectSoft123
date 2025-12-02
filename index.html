@@ -1,0 +1,384 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// We assume standard React/Tailwind environment, no external imports needed for styling
+
+// --- 1. Utility Functions ---
+
+/**
+ * Simulates a delay for API calls.
+ * @param {number} ms - Milliseconds to delay.
+ */
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Simple product data structure
+const initialProducts = [
+    { id: 1, name: "Gemini Pro Laptop", price: 1599.99, stock: 5, description: "High-performance machine powered by AI." },
+    { id: 2, name: "Flash Keyboard", price: 99.00, stock: 150, description: "Mechanical keyboard with silent switches." },
+    { id: 3, name: "Nano Mouse", price: 49.50, stock: 0, description: "Ergonomic wireless mouse." },
+];
+
+// --- 2. Shared UI Components ---
+
+const Button = ({ children, onClick, disabled, primary = true, className = '' }) => (
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+            w-full px-4 py-2 rounded-lg font-semibold 
+            transition-all duration-200 shadow-md
+            ${primary
+                ? 'bg-primary-blue text-white hover:bg-blue-700 disabled:bg-gray-400'
+                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:bg-gray-50'}
+            ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+            ${className}
+        `}
+    >
+        {children}
+    </button>
+);
+
+const InputField = ({ label, id, type = 'text', value, onChange, placeholder, error }) => (
+    <div className="mb-4">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <input
+            type={type}
+            id={id}
+            name={id}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            required
+            className={`
+                w-full px-3 py-2 border rounded-lg 
+                focus:ring-primary-blue focus:border-primary-blue
+                ${error ? 'border-red-500' : 'border-gray-300'}
+            `}
+        />
+        {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+    </div>
+);
+
+// --- 3. Component Implementations (as requested) ---
+
+// Component: Create Account/User (Authentication/Validation)
+const CreateAccount = ({ onLogin }) => {
+    const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+    const [errors, setErrors] = useState({});
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+        setErrors({ ...errors, [e.target.name]: '' }); // Clear error on change
+    };
+
+    const validate = () => {
+        const newErrors = {};
+        if (!formData.name.trim()) newErrors.name = 'Name is required.';
+        if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email address.';
+        if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters.';
+        if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+        return newErrors;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const validationErrors = validate();
+        setErrors(validationErrors);
+
+        if (Object.keys(validationErrors).length === 0) {
+            setIsLoading(true);
+            try {
+                // Simulate API call for user creation
+                await delay(1500);
+                console.log('Account Created:', formData.email);
+                // After successful creation, automatically log in
+                onLogin({ name: formData.name, id: Date.now() });
+            } catch (error) {
+                setErrors({ general: 'Failed to create account. Please try again.' });
+            } finally {
+                setIsLoading(false);
+            }
+        }
+    };
+
+    return (
+        <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-2xl border border-gray-100">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center">Create Account</h2>
+            {errors.general && <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg">{errors.general}</div>}
+            <form onSubmit={handleSubmit}>
+                <InputField label="Full Name" id="name" value={formData.name} onChange={handleChange} placeholder="Jane Doe" error={errors.name} />
+                <InputField label="Email" id="email" type="email" value={formData.email} onChange={handleChange} placeholder="user@example.com" error={errors.email} />
+                <InputField label="Password" id="password" type="password" value={formData.password} onChange={handleChange} placeholder="Min 8 characters" error={errors.password} />
+                <InputField label="Verify Password" id="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} placeholder="Repeat password" error={errors.confirmPassword} />
+                
+                <Button type="submit" disabled={isLoading} primary={true}>
+                    {isLoading ? 'Creating Account...' : 'Sign Up'}
+                </Button>
+            </form>
+        </div>
+    );
+};
+
+// Component: Dashboard (Load Initial Data)
+const Dashboard = ({ user, products, onEditProduct }) => {
+    // Memoized calculation for overall stock status
+    const totalStock = useMemo(() => 
+        products.reduce((sum, p) => sum + p.stock, 0), 
+        [products]
+    );
+
+    return (
+        <div className="space-y-8">
+            <h2 className="text-4xl font-bold text-gray-900">Welcome back, {user.name}!</h2>
+            
+            {/* Key Metrics */}
+            <div className="grid md:grid-cols-3 gap-6">
+                <MetricCard title="Total Products" value={products.length} />
+                <MetricCard title="Total Stock Units" value={totalStock} />
+                <MetricCard title="Out of Stock Items" value={products.filter(p => p.stock === 0).length} alert={true} />
+            </div>
+
+            {/* Product List */}
+            <h3 className="text-3xl font-semibold text-gray-800 pt-4">Product Inventory</h3>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {products.map((product) => (
+                            <tr 
+                                key={product.id} 
+                                className={product.stock === 0 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}
+                            >
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.price.toFixed(2)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                                    {product.stock > 0 
+                                        ? product.stock 
+                                        : <span className="text-red-500">OUT OF STOCK</span>
+                                    }
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button 
+                                        onClick={() => onEditProduct(product)} 
+                                        className="text-primary-blue hover:text-blue-700 transition duration-150"
+                                    >
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const MetricCard = ({ title, value, alert = false }) => (
+    <div className={`
+        p-5 rounded-xl shadow-lg border
+        ${alert ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}
+    `}>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className={`text-3xl font-extrabold mt-1 ${alert ? 'text-red-600' : 'text-gray-900'}`}>{value}</p>
+    </div>
+);
+
+
+// Component: Create or Update a Product (CRUD)
+const ProductForm = ({ productToEdit, onSave, onCancel }) => {
+    const isEditing = !!productToEdit;
+    const [formData, setFormData] = useState(productToEdit || { name: '', price: '', stock: '', description: '' });
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        // Basic validation
+        // NOTE: In a production app, use a custom modal instead of alert()
+        if (!formData.name || !parseFloat(formData.price) || !parseInt(formData.stock)) {
+            // Replaced alert() with console log and reset to adhere to guidelines
+            console.error('Validation Error: Please fill out all fields correctly.');
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            // Simulate API call for creation or update
+            await delay(1000);
+            const savedProduct = { 
+                ...formData, 
+                price: parseFloat(formData.price),
+                stock: parseInt(formData.stock),
+                id: isEditing ? formData.id : Date.now() 
+            };
+            onSave(savedProduct, isEditing);
+        } catch (error) {
+            console.error('Error saving product:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="max-w-xl mx-auto p-8 bg-white rounded-xl shadow-2xl border border-gray-100">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center">
+                {isEditing ? 'Update Product' : 'Create New Product'}
+            </h2>
+            <form onSubmit={handleSubmit}>
+                <InputField label="Product Name" id="name" value={formData.name} onChange={handleChange} placeholder="Widget Pro" />
+                <InputField label="Price" id="price" type="number" value={formData.price} onChange={handleChange} placeholder="0.00" />
+                <InputField label="Stock Quantity" id="stock" type="number" value={formData.stock} onChange={handleChange} placeholder="100" />
+                <div className="mb-6">
+                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea 
+                        id="description" 
+                        name="description" 
+                        rows="3" 
+                        value={formData.description} 
+                        onChange={handleChange} 
+                        placeholder="A short description of the product." 
+                        className="
+                            w-full px-3 py-2 border border-gray-300 rounded-lg 
+                            focus:ring-primary-blue focus:border-primary-blue
+                        "
+                    ></textarea>
+                </div>
+                
+                <div className="flex space-x-4">
+                    <Button type="button" onClick={onCancel} primary={false} className="flex-1">Cancel</Button>
+                    <Button type="submit" disabled={isLoading} primary={true} className="flex-1">
+                        {isLoading ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Product')}
+                    </Button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+
+// --- Main Application Component ---
+const App = () => {
+    // State for user authentication (null means logged out)
+    const [user, setUser] = useState(null); // { id: 1, name: 'Admin' }
+    // State for product data
+    const [products, setProducts] = useState(initialProducts);
+    // State for managing the view (e.g., 'dashboard', 'createAccount', 'editProduct')
+    const [view, setView] = useState('createAccount');
+    // State to hold the product being edited
+    const [productToEdit, setProductToEdit] = useState(null);
+
+    // Simulate initial data load when component mounts (or user logs in)
+    useEffect(() => {
+        // Here you would typically load user session from storage or an API check
+        // For now, we simulate a guest view until an account is created.
+    }, []);
+
+    // Handlers
+    const handleLogin = useCallback((userData) => {
+        setUser(userData);
+        setView('dashboard');
+    }, []);
+
+    const handleLogout = useCallback(() => {
+        setUser(null);
+        setView('createAccount');
+    }, []);
+
+    const handleEditProduct = useCallback((product) => {
+        setProductToEdit(product);
+        setView('editProduct');
+    }, []);
+
+    const handleCreateProductClick = useCallback(() => {
+        setProductToEdit(null); // Ensure no product is loaded for creation
+        setView('createProduct');
+    }, []);
+
+    const handleSaveProduct = useCallback((newProduct, isEditing) => {
+        setProducts(prevProducts => {
+            if (isEditing) {
+                // Update existing product
+                return prevProducts.map(p => 
+                    p.id === newProduct.id ? newProduct : p
+                );
+            } else {
+                // Add new product
+                return [...prevProducts, newProduct];
+            }
+        });
+        setView('dashboard');
+    }, []);
+
+    const handleCancelForm = useCallback(() => {
+        setView('dashboard');
+        setProductToEdit(null);
+    }, []);
+
+
+    // --- View Rendering Logic ---
+    let content;
+    switch (view) {
+        case 'createAccount':
+            content = <CreateAccount onLogin={handleLogin} />;
+            break;
+        case 'dashboard':
+            content = <Dashboard 
+                user={user} 
+                products={products} 
+                onEditProduct={handleEditProduct} 
+            />;
+            break;
+        case 'createProduct':
+            content = <ProductForm onSave={handleSaveProduct} onCancel={handleCancelForm} productToEdit={null} />;
+            break;
+        case 'editProduct':
+            content = <ProductForm onSave={handleSaveProduct} onCancel={handleCancelForm} productToEdit={productToEdit} />;
+            break;
+        default:
+            content = <CreateAccount onLogin={handleLogin} />;
+    }
+
+    // --- Main Layout ---
+    return (
+        <div className="min-h-screen bg-bg-light">
+            {/* Header / Navigation */}
+            <header className="bg-primary-blue text-white shadow-lg">
+                <div className="max-w-7xl mx-auto px-6 lg:px-8 h-16 flex justify-between items-center">
+                    <h1 className="text-2xl font-bold">Admin Portal</h1>
+                    {user && (
+                        <nav className="flex items-center space-x-4">
+                            <button onClick={() => setView('dashboard')} className="hover:text-blue-200 transition duration-150">Dashboard</button>
+                            <button onClick={handleCreateProductClick} 
+                                className="px-3 py-1 bg-white text-primary-blue rounded-lg font-semibold hover:bg-gray-200 transition duration-150">
+                                + Product
+                            </button>
+                            <button onClick={handleLogout} 
+                                className="px-3 py-1 border border-white rounded-lg hover:bg-white hover:text-primary-blue transition duration-150">
+                                Logout
+                            </button>
+                        </nav>
+                    )}
+                </div>
+            </header>
+
+            {/* Main Content Area */}
+            <main className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
+                {content}
+            </main>
+        </div>
+    );
+};
+
+export default App;
